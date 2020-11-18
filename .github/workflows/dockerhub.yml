@@ -1,6 +1,8 @@
 name: dockerhub publish
 
 on:
+  release:
+    types: published
   repository_dispatch:
     types: dockerhub
 
@@ -16,7 +18,7 @@ jobs:
         uses: docker/setup-buildx-action@v1
       -
         name: Login to DockerHub
-        uses: docker/login-action@v1 
+        uses: docker/login-action@v1
         with:
           username: ${{ secrets.DOCKERHUB_LOGIN }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -26,8 +28,9 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          file: docker/Dockerfile.debian10
-          tags: ovhcom/the-bastion:sandbox-latest
+          file: docker/Dockerfile.sandbox
+          tags: ovhcom/the-bastion:sandbox
+          platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
       -
         name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}

@@ -1,4 +1,4 @@
-![](https://user-images.githubusercontent.com/218502/96882661-d3b21e80-147f-11eb-8d89-a69e37a5870b.png)
+![The Bastion Logo](https://user-images.githubusercontent.com/218502/96882661-d3b21e80-147f-11eb-8d89-a69e37a5870b.png)
 
 The Bastion
 ===========
@@ -13,19 +13,25 @@ Learn more by reading the blog post series that announced the release:
 - [Part 3 - Security at the Core](https://www.ovh.com/blog/the-bastion-part-3-security-at-the-core/)
 - [Part 4 - A new era](https://www.ovh.com/blog/the-bastion-part-4-a-new-era/)
 
+## Quick connection and replay example
+
+[![asciicast](https://asciinema.org/a/369555.png)](https://asciinema.org/a/369555?autoplay=1)
+
 ## Installing, upgrading, using The Bastion
 
-Please see the online documentation ([https://ovh.github.io/the-bastion](https://ovh.github.io/the-bastion/)), or the corresponding text-based documentation which can be found in the `doc/` folder.
+Please see the [online documentation](https://ovh.github.io/the-bastion/), or the corresponding text-based version found in the `doc/` folder.
 
-## TL;DR
+## TL;DR: disposable sandbox using Docker
 
-### Testing it with Docker
+This is a good way to test The Bastion within seconds, but [read the FAQ](https://ovh.github.io/the-bastion/faq.html#can-i-run-it-under-docker-in-production) if you're serious about using containerization in production.
 
-Let's run the docker image
+The sandbox image is available for the following architectures: linux/386, linux/amd64, linux/arm/v6, linux/arm/v7, linux/arm64, linux/ppc64le, linux/s390x.
 
-    docker run -d -p 22 --name bastiontest ovhcom/the-bastion:sandbox-latest
+Let's run the docker image:
 
-Configure the first administrator account (get your public SSH key ready)
+    docker run -d -p 22 --name bastiontest ovhcom/the-bastion:sandbox
+
+Get your public SSH key at hand, then configure the first administrator account:
 
     docker exec -it bastiontest /opt/bastion/bin/admin/setup-first-admin-account.sh poweruser auto
 
@@ -56,9 +62,9 @@ Note that you can connect directly without using interactive mode, with:
 
     bastion <remote_account_name>@<remote_machine_host_or_ip>
 
-That's it! Additional documentation is available under the `doc/` folder and online ([https://ovh.github.io/the-bastion](https://ovh.github.io/the-bastion/)).
-Be sure to check the help of the bastion (`bastion --help`) and the help of each osh plugin (`bastion --osh command --help`)
-Also don't forget to customize your `bastion.conf` file, which can be found in `/etc/bastion/bastion.conf` (for Linux)
+That's it! Of course, there is a lot more to it, documentation is available under the `doc/` folder and [online](https://ovh.github.io/the-bastion/).
+Be sure to check the help of the bastion (`bastion --help`) and the help of each osh plugin (`bastion --osh command --help`).
+Also don't forget to customize your `bastion.conf` file, which can be found in `/etc/bastion/bastion.conf` (for Linux).
 
 ## Compatibility
 
@@ -67,14 +73,16 @@ Linux distros below are tested with each release, but as this is a security prod
 - Debian 10 (Buster), 9 (Stretch), 8 (Jessie)
 - RHEL/CentOS 8, 7
 - Ubuntu LTS 20.04, 18.04, 16.04, 14.04*
-- OpenSUSE Leap 15.1*, 15*
+- OpenSUSE Leap 15.2*, 15.1*, 15.0*
 
-*: Note that these versions have no MFA support.
+*: Note that these versions have no out-of-the-box MFA support, as they lack packaged versions of `pamtester`, `pam-google-authenticator`, or both. Of course, you may compile those yourself.
 Any other so-called "modern" Linux version are not tested with each release, but should work with no or minor adjustments.
 
 The code is also known to work correctly under:
 
-- FreeBSD 10+ / HardenedBSD [no MFA support]
+- FreeBSD 10+ / HardenedBSD**
+
+**: Note that FreeBSD has partial MFA support, due to its reduced set of available `pam` plugins. You can set it up to support an additional password or TOTP factor, but not both.
 
 Other BSD variants partially work but are unsupported and discouraged as they have a severe limitation over the maximum number of supplementary groups (causing problems for group membership and restricted commands checks), no filesystem-level ACL support and missing MFA:
 
@@ -90,7 +98,7 @@ When hell is breaking loose on all your infrastructures and/or your network, bas
 * The bastion is engineered to be self-sufficient: less dependencies such as databases, other daemons, or other machines, statistically means less downtime
 * High availability can be setup so that multiple bastion instances form a cluster of several instances, with any instance usable at all times (active/active scheme)
 
-# Code quality
+## Code quality
 
 * The code is ran under `perltidy`
 * The code is also ran under `perlcritic`
@@ -130,14 +138,15 @@ Even with the most conservative, precautionous and paranoid coding process, code
 ## Auditability
 
 - Bastion administrators must use the bastion's logic to connect to itself to administer it (or better, use another bastion to do so), this ensures auditability in all cases
-* Every access and action (wether allowed or denied) is logged with:
+* Every access and action (whether allowed or denied) is logged with:
     * `syslog`, which should also be sent to a remote syslog server to ensure even bastion administrators can't tamper their tracks, and/or
     * local `sqlite3` databases for easy searching
+* Every session is recorded with `ttyrec`, helper scripts are provided to encrypt and push these records on a remote escrow filer
 * This code is used in production in several PCI-DSS, ISO 27001, SOC1 and SOC2 certified environments
 
 ## Related
 
-- [ovh-ttyrec](https://github.com/ovh/ovh-ttyrec) - A terminal (tty) recorder
+- [ovh-ttyrec](https://github.com/ovh/ovh-ttyrec) - An enhanced but compatible version of ttyrec, a terminal (tty) recorder
 
 ## License
 

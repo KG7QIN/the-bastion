@@ -7,12 +7,16 @@ If you are just upgrading from a previous version, please read :doc:`upgrading<u
 1. Operating system
 ===================
 
+.. warning::
+
+   The Bastion expects to be the only main service running on the server, please see :ref:`this FAQ entry <faq_existing_server>` for more information.
+
 The following Linux distros are tested with each release, but as this is a security product, you are *warmly* advised to run it on the latest up-to-date stable version of your favorite OS:
 
 - Debian 10 (Buster), 9 (Stretch), 8 (Jessie)
 - RHEL/CentOS 8, 7
 - Ubuntu LTS 20.04, 18.04, 16.04, 14.04*
-- OpenSUSE Leap 15.1*, 15*
+- OpenSUSE Leap 15.2*, 15.1*, 15.0*
 
 \*: Note that these versions have no MFA support.
 
@@ -52,7 +56,7 @@ Get the tarball of the latest release, which can be found `here <https://github.
 .. code-block:: shell
 
   test -d /opt/bastion || mkdir -p /opt/bastion
-  tar -C /opt/bastion v3.00.00.tar.gz
+  tar -C /opt/bastion v__VERSION__.tar.gz
 
 The code supports being hosted somewhere else on the filesystem hierarchy, but this is discouraged as you might need to adjust a lot of configuration files (notably sudoers.d, cron.d, init.d) that needs an absolute path.
 You should end up with directories such as ``bin``, ``lib``, etc. directly under ``/opt/bastion``.
@@ -64,7 +68,7 @@ For the supported Linux distros (see above), you can simply run:
 
 .. code-block:: shell
 
-    /opt/bastion/bin/admin/packages-check.sh -i
+   /opt/bastion/bin/admin/packages-check.sh -i
 
 You can add other parameters to install optional packages, depending on your environment:
 
@@ -72,7 +76,13 @@ You can add other parameters to install optional packages, depending on your env
 - ``-d`` to install packages needed for developing the software (useless in production)
 - ``-t`` to install ``ovh-ttyrec``
 
-Note that ``-t`` makes the assumption that you have made available ``ovh-ttyrec`` to your distro repositories. If you haven't omit the ``-t`` and check the `ovh-ttyrec code repository <https://github.com/ovh/ovh-ttyrec>`_'s readme section titled "*build a .deb package*" for instructions on how to do so (spoiler: it's a oneliner).
+Note that ``-t`` makes the assumption that you have compiled and made available ``ovh-ttyrec`` to your distro repositories. If you haven't, you can use the following helper:
+
+.. code-block:: shell
+
+   /opt/bastion/bin/admin/install-ttyrec.sh -a
+
+This will detect your distro, then download and either install the ``.deb`` or ``.rpm`` package for `ovh-ttyrec <https://github.com/ovh/ovh-ttyrec>`_. If your distro doesn't handle those package types, it'll fallback to installing precompiled static binaries. Of course you can package it yourself and make it available to your own internal repositories instead of installing it this way.
 
 4. Encrypt /home
 ================
@@ -114,8 +124,8 @@ If you used ``--upgrade``, then you are **warmly** advised to harden the configu
 
 .. code-block:: shell
 
-    vimdiff /opt/bastion/etc/ssh/ssh_config.deb10 /etc/ssh/ssh_config
-    vimdiff /opt/bastion/etc/ssh/sshd_config.deb10 /etc/ssh/sshd_config
+    vimdiff /opt/bastion/etc/ssh/ssh_config.debian10 /etc/ssh/ssh_config
+    vimdiff /opt/bastion/etc/ssh/sshd_config.debian10 /etc/ssh/sshd_config
 
 There are other templates available in the same directory, for the other supported distros.
 

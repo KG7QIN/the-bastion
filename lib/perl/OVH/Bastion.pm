@@ -5,7 +5,7 @@ use common::sense;
 use Fcntl;
 use POSIX qw(strftime);
 
-our $VERSION = '3.00.00';
+our $VERSION = '3.00.02';
 
 BEGIN {
     # only used by the handler below
@@ -26,7 +26,7 @@ BEGIN {
         my $criticity = ($type eq 'die' ? 'err' : 'warning');
 
         # Net::Server can be noisy if the client fails to establish the SSL connection,
-        # transform thoses die into info to avoid triggering SIEM alerts
+        # transform those die into info to avoid triggering SIEM alerts
         $criticity = 'info' if (defined $msg and $msg =~ m{^Could not finalize SSL connection with client handle});
 
         require Carp;
@@ -156,7 +156,7 @@ sub AUTOLOAD {    ## no critic (AutoLoading)
     die "AUTOLOAD FAILED: $AUTOLOAD";
 }
 
-# checks wether an account is expired (inactivity) if that's configured on this bastion
+# checks whether an account is expired (inactivity) if that's configured on this bastion
 sub is_account_nonexpired {
     my %params        = @_;
     my $sysaccount    = $params{'sysaccount'};
@@ -499,7 +499,7 @@ sub is_valid_ip {
     my %params        = @_;
     my $ip            = $params{'ip'};
     my $allowPrefixes = $params{'allowPrefixes'};    # if not, a /24 or /32 notation is rejected
-    my $fast          = $params{'fast'};             # fast mode: avoid instanciating Net::IP... except if ipv6
+    my $fast          = $params{'fast'};             # fast mode: avoid instantiating Net::IP... except if ipv6
 
     if ($fast and $ip !~ m{:}) {
 
@@ -918,6 +918,51 @@ sub build_ttyrec_cmdline {
     push @ttyrec, @$ttyrecAdditionalParameters if @$ttyrecAdditionalParameters;
 
     return R('OK', value => {saveFile => $saveFile, cmd => \@ttyrec});
+}
+
+sub do_pamtester {
+    my %params  = @_;
+    my $sysself = $params{'sysself'};
+    my $self    = $params{'self'};
+    my $fnret;
+
+    if (!$sysself || !$self) {
+        return R('ERR_MISSING_PARAMETER', msg => "Missing mandatory arguments 'sysself' or 'self'");
+    }
+
+    # use system() instead of OVH::Bastion::execute() because we need it to grab the term
+    my $pamtries = 3;
+    while (1) {
+        my $pamsysret;
+        if (OVH::Bastion::is_freebsd()) {
+            $pamsysret = system('sudo', '-n', '-u', 'root', '--', '/usr/bin/env', 'pamtester', 'sshd', $sysself, 'authenticate');
+        }
+        else {
+            $pamsysret = system('pamtester', 'sshd', $sysself, 'authenticate');
+        }
+        if ($pamsysret < 0) {
+            return R('KO_MFA_FAILED', msg => "MFA is required for this host, but this bastion is missing the `pamtester' tool, aborting");
+        }
+        elsif ($pamsysret != 0) {
+            if (--$pamtries <= 0) {
+                return R('KO_MFA_FAILED', msg => "Sorry, but Multi-Factor Authentication failed, I can't connect you to this host");
+            }
+            next;
+        }
+
+        # success, if we are configured to launch a external command on pamtester success, do it.
+        # see the bastion.conf.dist file for usage example.
+        my $MFAPostCommand = OVH::Bastion::config('MFAPostCommand')->value;
+        if (ref $MFAPostCommand eq 'ARRAY' && @$MFAPostCommand) {
+            s/%ACCOUNT%/$self/g for @$MFAPostCommand;
+            $fnret = OVH::Bastion::execute(cmd => $MFAPostCommand, must_succeed => 1);
+            if (!$fnret) {
+                warn_syslog("MFAPostCommand returned a non-zero value: " . $fnret->msg);
+            }
+        }
+        last;
+    }
+    return R('OK_MFA_SUCCESS');
 }
 
 1;

@@ -40,6 +40,11 @@ if echo "$DISTRO_LIKE" | grep -q -w debian; then
                 libwww-perl libdigest-sha-perl libnet-ssleay-perl \
                 libnet-server-perl cryptsetup mosh expect openssh-server locales \
                 coreutils netcat bash libcgi-pm-perl iputils-ping"
+    # workaround for debian/armhf: curl fails to validate some SSL certificates,
+    # whereas wget succeeds; this is needed for e.g. install-ttyrec.sh
+    if [ "$(uname -m)" = armv7l ]; then
+        wanted_list="$wanted_list wget"
+    fi
     [ "$opt_dev" = 1 ] && wanted_list="$wanted_list libperl-critic-perl perltidy shellcheck"
     if { [ "$LINUX_DISTRO" = debian ] && [ "$DISTRO_VERSION_MAJOR" -lt 9 ]; } ||
        { [ "$LINUX_DISTRO" = ubuntu ] && [ "$DISTRO_VERSION_MAJOR" -le 16 ]; }; then
@@ -70,7 +75,7 @@ elif echo "$DISTRO_LIKE" | grep -q -w rhel; then
             perl-libwww-perl perl-Digest perl-Net-Server cryptsetup mosh \
             expect openssh-server nc bash perl-CGI perl(Test::More) passwd \
             cracklib-dicts perl-Time-Piece perl-Time-HiRes which \
-            perl-Sys-Syslog pamtester google-authenticator"
+            perl-Sys-Syslog pamtester google-authenticator qrencode-libs"
     if [ "$DISTRO_VERSION_MAJOR" = 7 ]; then
         wanted_list="$wanted_list fortune-mod coreutils"
     fi
@@ -120,8 +125,18 @@ elif echo "$DISTRO_LIKE" | grep -q -w suse; then
     installed="FIXME"
     install_cmd="zypper install"
 elif [ "$OS_FAMILY" = FreeBSD ]; then
+    wanted_list="base64 coreutils rsync bash sudo pamtester p5-JSON p5-JSON-XS p5-common-sense p5-Net-IP p5-GnuPG p5-DBD-SQLite p5-Net-Netmask p5-Term-ReadKey expect fping p5-Net-Server p5-CGI p5-LWP-Protocol-https"
+    install_cmd="pkg add"
+    installed=""
+    for i in $wanted_list
+    do
+        if pkg info -e "$i"; then
+                installed="$installed $i"
+        fi
+    done
     if [ "$opt_install" = 1 ]; then
-        pkg install -y rsync bash sudo p5-JSON p5-JSON-XS p5-common-sense p5-Net-IP p5-GnuPG p5-DBD-SQLite p5-Net-Netmask p5-Term-ReadKey expect fping p5-Net-Server p5-CGI p5-LWP-Protocol-https
+        # shellcheck disable=SC2086
+        pkg install -y $wanted_list
         exit $?
     fi
 else

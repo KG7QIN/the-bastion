@@ -324,7 +324,7 @@ if ($realOptions =~ /^(.*?) -- (.*)$/) {
 }
 else {
     # we have no -- delimiter, either there was no remote command (that's fine),
-    # or it's indistiguishable from the bastion options, in that case GetOptionsFromString
+    # or it's indistinguishable from the bastion options, in that case GetOptionsFromString
     # will leave what it doesn't recognize, will also fuck up "" and '', but users are warned
     # to always use -- anyway, and we'll use that as a remote command
     $beforeOptions = $realOptions;
@@ -790,7 +790,7 @@ if ($osh_command) {
         $log_db_name   = $logret->value->{'db_name'};
     }
     else {
-        warn_syslog("Failed to insert accesss log: " . $logret->msg);
+        warn_syslog("Failed to insert access log: " . $logret->msg);
         if ($ip eq '127.0.0.1') {
             osh_warn("Would deny access on out of space condition but you're root\@127.0.0.1, I hope you're here to fix me!");
         }
@@ -802,10 +802,10 @@ if ($osh_command) {
     if ($fnret) {
         my @cmd = ($fnret->value->{'fullpath'}, $user, $ip, $host, $optPort, @$remainingOptions);
 
-        # is plugin explicitely disabled?
+        # is plugin explicitly disabled?
         my $isDisabled = OVH::Bastion::plugin_config(plugin => $osh_command, key => "disabled");
 
-        # plugin is enabled by default if not explicitely disabled
+        # plugin is enabled by default if not explicitly disabled
         if ($isDisabled and $isDisabled->value() =~ /yes/) {
             main_exit OVH::Bastion::EXIT_RESTRICTED_COMMAND, "plugin_disabled", "Sorry, this plugin has been disabled by policy.";
         }
@@ -872,58 +872,32 @@ if ($osh_command) {
         if ($MFArequiredForPlugin ne 'none' && !$skipMFA) {
             print "As this is required to run this plugin, entering MFA phase.\n";
 
-            # use system() instead of OVH::Bastion::execute() because we need it to grab the term
-            my $pamtries = 3;
-            while (1) {
-                my $pamsysret = system('pamtester', 'sshd', $sysself, 'authenticate');
-                if ($pamsysret < 0) {
-                    main_exit(OVH::Bastion::EXIT_MFA_FAILED, 'mfa_failed', "MFA is required for this plugin, but this bastion is missing the `pamtester' tool, aborting");
-                }
-                elsif ($pamsysret != 0) {
-                    if (--$pamtries <= 0) {
-                        main_exit(OVH::Bastion::EXIT_MFA_FAILED, 'mfa_failed', "Sorry, but Multi-Factor Authentication failed, aborting");
-                    }
-                    next;
-                }
-
-                # success, if we are configured to launch a external command on pamtester success, do it.
-                # see the bastion.conf.dist file for usage example.
-                my $MFAPostCommand = OVH::Bastion::config('MFAPostCommand')->value;
-                if (ref $MFAPostCommand eq 'ARRAY' && @$MFAPostCommand) {
-                    s/%ACCOUNT%/$self/g for @$MFAPostCommand;
-                    $fnret = OVH::Bastion::execute(cmd => $MFAPostCommand, must_succeed => 1);
-                    if (!$fnret) {
-                        warn_syslog("MFAPostCommand returned a non-zero value: " . $fnret->msg);
-                    }
-                }
-                last;
-            }
+            $fnret = OVH::Bastion::do_pamtester(self => $self, sysself => $sysself);
+            $fnret or main_exit(OVH::Bastion::EXIT_MFA_FAILED, 'mfa_failed', $fnret->msg);
         }
 
         OVH::Bastion::set_terminal_mode_for_plugin(plugin => $osh_command, action => 'set');
-        if (OVH::Bastion::is_bsd() && $osh_command eq 'selfMFASetupPassword') {
-            system(@cmd);
-            $fnret = R('OK', value => {sysret => $?});
-        }
-        else {
-            # some plugins need to be called with system() instead of ::execute
-            my $is_binary;
-            my $system;
+
+        # get the execution mode required by the plugin
+        my $is_binary;
+        my $system;
+        $fnret = OVH::Bastion::plugin_config(plugin => $osh_command, key => "execution_mode_on_$^O");
+        if (!$fnret || !$fnret->value) {
             $fnret = OVH::Bastion::plugin_config(plugin => $osh_command, key => "execution_mode");
-            if ($fnret && $fnret->value) {
-                $system    = 1 if $fnret->value eq 'system';
-                $is_binary = 1 if $fnret->value eq 'binary';
-            }
-            $ENV{'OSH_IP_FROM'} = $ipfrom;    # used in some plugins for is_access_granted()
-            $fnret = OVH::Bastion::execute(
-                cmd           => \@cmd,
-                noisy_stdout  => 1,
-                noisy_stderr  => 1,
-                expects_stdin => 1,
-                system        => $system,
-                is_binary     => $is_binary,
-            );
         }
+        if ($fnret && $fnret->value) {
+            $system    = 1 if $fnret->value eq 'system';
+            $is_binary = 1 if $fnret->value eq 'binary';
+        }
+        $ENV{'OSH_IP_FROM'} = $ipfrom;    # used in some plugins for is_access_granted()
+        $fnret = OVH::Bastion::execute(
+            cmd           => \@cmd,
+            noisy_stdout  => 1,
+            noisy_stderr  => 1,
+            expects_stdin => 1,
+            system        => $system,
+            is_binary     => $is_binary,
+        );
         OVH::Bastion::set_terminal_mode_for_plugin(plugin => $osh_command, action => 'restore');
 
         if (defined $log_insert_id and defined $log_db_name) {
@@ -1160,7 +1134,7 @@ else {
     if (not $quiet) {
         $fnret = OVH::Bastion::account_config(account => $self, key => OVH::Bastion::OPT_ACCOUNT_IDLE_IGNORE, public => 1);
         if ($fnret && $fnret->value =~ /yes/) {
-            osh_debug("Acccount is immune to idle");
+            osh_debug("Account is immune to idle");
         }
         else {
             if ($config->{'idleLockTimeout'}) {
@@ -1306,32 +1280,8 @@ if ($JITMFARequired) {
         print "... skipping as your account is exempt from MFA\n";
     }
     else {
-        # use system() instead of OVH::Bastion::execute() because we need it to grab the term
-        my $pamtries = 3;
-        while (1) {
-            my $pamsysret = system('pamtester', 'sshd', $sysself, 'authenticate');
-            if ($pamsysret < 0) {
-                main_exit(OVH::Bastion::EXIT_MFA_FAILED, 'mfa_failed', "MFA is required for this host, but this bastion is missing the `pamtester' tool, aborting");
-            }
-            elsif ($pamsysret != 0) {
-                if (--$pamtries <= 0) {
-                    main_exit(OVH::Bastion::EXIT_MFA_FAILED, 'mfa_failed', "Sorry, but Multi-Factor Authentication failed, I can't connect you to this host");
-                }
-                next;
-            }
-
-            # success, if we are configured to launch a external command on pamtester success, do it.
-            # see the bastion.conf.dist file for usage example.
-            my $MFAPostCommand = OVH::Bastion::config('MFAPostCommand')->value;
-            if (ref $MFAPostCommand eq 'ARRAY' && @$MFAPostCommand) {
-                s/%ACCOUNT%/$self/g for @$MFAPostCommand;
-                $fnret = OVH::Bastion::execute(cmd => $MFAPostCommand, must_succeed => 1);
-                if (!$fnret) {
-                    warn_syslog("MFAPostCommand returned a non-zero value: " . $fnret->msg);
-                }
-            }
-            last;
-        }
+        $fnret = OVH::Bastion::do_pamtester(self => $self, sysself => $sysself);
+        $fnret or main_exit(OVH::Bastion::EXIT_MFA_FAILED, 'mfa_failed', $fnret->msg);
     }
 }
 
@@ -1441,7 +1391,7 @@ Usage (osh cmd): $bastionName --osh [OSH_COMMAND] [OSH_OPTIONS]
     --verbose,  -v       Enable verbose ssh
     --tty,      -t       Force tty allocation
     --no-tty,   -T       Prevent tty allocation
-    --use-key      FP    Explicitely specify the fingerprint of the egress key you want to use
+    --use-key      FP    Explicitly specify the fingerprint of the egress key you want to use
     --kbd-interactive    Enable the keyboard-interactive authentication scheme on egress connection
     --netconf            Request to use netconf subsystem
 
